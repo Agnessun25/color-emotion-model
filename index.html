@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>顏色情緒預測 · Model 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0e0e10;
+    --surface:  #18181c;
+    --surface2: #222228;
+    --border:   #2e2e38;
+    --text:     #e8e6df;
+    --muted:    #7a7870;
+    --accent:   #c8b97a;
+    --radius:   10px;
+    --mono:     'DM Mono', monospace;
+    --serif:    'Lora', serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  header .tag {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  header p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 680px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  /* Colour grid */
+  .colour-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .colour-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 6px 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .colour-btn:hover { border-color: #555; background: #28282e; }
+  .colour-btn.selected { border-color: var(--accent); }
+  .colour-btn .dot {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .colour-btn .clabel {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .colour-btn.selected .clabel { color: var(--accent); }
+
+  /* Form rows */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .field label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+  .field select {
+    width: 100%;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    appearance: none;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field select:focus { border-color: var(--accent); }
+  .field .range-wrap {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .field input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .field input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+  }
+  .range-val {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+    min-width: 18px;
+    text-align: right;
+  }
+
+  /* Predict button */
+  .predict-btn {
+    width: 100%;
+    max-width: 680px;
+    padding: 14px;
+    background: var(--accent);
+    color: #0e0e10;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-bottom: 24px;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .predict-btn:hover { opacity: 0.88; }
+  .predict-btn:active { transform: scale(0.99); }
+
+  /* Results */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 680px;
+  }
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .result-dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+  .result-title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 400;
+  }
+  .result-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    letter-spacing: 0.06em;
+  }
+
+  .emotion-row {
+    margin-bottom: 20px;
+  }
+  .emotion-row:last-child { margin-bottom: 0; }
+  .emotion-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 7px;
+  }
+  .emotion-name {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .emotion-score {
+    font-size: 18px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s cubic-bezier(0.16,1,0.3,1);
+    width: 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 36px 0;
+    color: var(--muted);
+    font-size: 13px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 680px;
+    line-height: 2;
+  }
+
+  .model-info {
+    margin-top: 32px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.8;
+  }
+  .model-info span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">Color Emotion Analysis · Model 1</div>
+  <h1>顏色情緒分數預測</h1>
+  <p>選擇顏色與族群背景，預測四大情緒指標分數（0–5）</p>
+</header>
+
+<!-- 顏色選擇 -->
+<div class="card">
+  <div class="card-title">01 · 選擇顏色</div>
+  <div class="colour-grid" id="colour-grid"></div>
+</div>
+
+<!-- 族群資訊 -->
+<div class="card">
+  <div class="card-title">02 · 族群資訊</div>
+  <div class="form-grid">
+    <div class="field">
+      <label>性別</label>
+      <select id="gender">
+        <option value="0">女性</option>
+        <option value="1" selected>男性</option>
+        <option value="2">不透露</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>年齡層</label>
+      <select id="age_group">
+        <option value="0">未成年 (&lt;18)</option>
+        <option value="1" selected>青年 (18–35)</option>
+        <option value="2">中年 (36–55)</option>
+        <option value="3">壯年 (56+)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>英語流利度</label>
+      <div class="range-wrap">
+        <input type="range" id="fluent" min="0" max="10" step="1" value="7">
+        <span class="range-val" id="fluent-val">7</span>
+      </div>
+    </div>
+  </div>
+  <div class="form-grid-2">
+    <div class="field">
+      <label>居住國家</label>
+      <select id="country"></select>
+    </div>
+    <div class="field">
+      <label>母語</label>
+      <select id="lang"></select>
+    </div>
+  </div>
+</div>
+
+<button class="predict-btn" onclick="runPrediction()">▶ 預測情緒分數</button>
+
+<div class="empty-state" id="empty-state">
+  選擇顏色與族群後<br>按下預測按鈕查看結果
+</div>
+<div class="result-card" id="result-card" style="display:none"></div>
+
+<div class="model-info">
+  方法：<span>Ordinary Least Squares</span>（最小平方法，Lecture Note 5）<br>
+  特徵：<span>14 個人資訊特徵</span>（二進制編碼）+ <span>12 個顏色 one-hot</span><br>
+  訓練資料：<span>88,702 筆</span>　R²：vitality <span>0.182</span> · stability <span>0.116</span> · resonance <span>0.218</span> · alert <span>0.223</span>
+</div>
+
+<script>
+const COLOURS = [
+  { name:'black',     hex:'#1a1a1a', zh:'黑' },
+  { name:'blue',      hex:'#3b7dd8', zh:'藍' },
+  { name:'brown',     hex:'#8B5E3C', zh:'棕' },
+  { name:'green',     hex:'#3a9a5c', zh:'綠' },
+  { name:'grey',      hex:'#8a8a8a', zh:'灰' },
+  { name:'orange',    hex:'#e8803a', zh:'橙' },
+  { name:'pink',      hex:'#e87ab5', zh:'粉' },
+  { name:'purple',    hex:'#7c5cbf', zh:'紫' },
+  { name:'red',       hex:'#d63a3a', zh:'紅' },
+  { name:'turquoise', hex:'#2ab5a5', zh:'青' },
+  { name:'white',     hex:'#deded6', zh:'白' },
+  { name:'yellow',    hex:'#e8c93a', zh:'黃' },
+];
+
+const COLOUR_ORDER = COLOURS.map(c => c.name);
+
+const COUNTRY_MAP = {
+  'at':'奧地利','az':'亞塞拜然','be':'比利時','ch':'瑞士','cn':'中國',
+  'co':'哥倫比亞','cy':'賽普勒斯','de':'德國','ee':'愛沙尼亞','eg':'埃及',
+  'es':'西班牙','fi':'芬蘭','fr':'法國','gb':'英國','ge':'喬治亞',
+  'gr':'希臘','il':'以色列','ir':'伊朗','it':'義大利','jp':'日本',
+  'lt':'立陶宛','lv':'拉脫維亞','mx':'墨西哥','ng':'奈及利亞','nl':'荷蘭',
+  'no':'挪威','nz':'紐西蘭','ph':'菲律賓','pl':'波蘭','rs':'塞爾維亞',
+  'ru':'俄羅斯','sa':'沙烏地阿拉伯','se':'瑞典','ua':'烏克蘭','us':'美國',
+  'other':'其他'
+};
+const LANG_MAP = {
+  'ar':'阿拉伯語','az':'亞塞拜然語','de':'德語','dnwta':'不透露','el':'希臘語',
+  'en':'英語','es':'西班牙語','et':'愛沙尼亞語','fa':'波斯語','fi':'芬蘭語',
+  'fr':'法語','he':'希伯來語','ig':'伊博語','it':'義大利語','ja':'日語',
+  'ka':'喬治亞語','lt':'立陶宛語','lv':'拉脫維亞語','nl':'荷蘭語','no':'挪威語',
+  'pl':'波蘭語','ru':'俄語','sr':'塞爾維亞語','sv':'瑞典語','uk':'烏克蘭語',
+  'zh':'中文','other':'其他'
+};
+const COUNTRY_BIN = {
+  'at':'000000','az':'000001','be':'000010','ch':'000011','cn':'000100',
+  'co':'000101','cy':'000110','de':'000111','ee':'001000','eg':'001001',
+  'es':'001010','fi':'001011','fr':'001100','gb':'001101','ge':'001110',
+  'gr':'001111','il':'010000','ir':'010001','it':'010010','jp':'010011',
+  'lt':'010100','lv':'010101','mx':'010110','ng':'010111','nl':'011000',
+  'no':'011001','nz':'011010','ph':'011011','pl':'011100','rs':'011101',
+  'ru':'011110','sa':'011111','se':'100000','ua':'100001','us':'100010',
+  'other':'100011'
+};
+const LANG_BIN = {
+  'ar':'00000','az':'00001','de':'00010','dnwta':'00011','el':'00100',
+  'en':'00101','es':'00110','et':'00111','fa':'01000','fi':'01001',
+  'fr':'01010','he':'01011','ig':'01100','it':'01101','ja':'01110',
+  'ka':'01111','lt':'10000','lv':'10001','nl':'10010','no':'10011',
+  'pl':'10100','ru':'10101','sr':'10110','sv':'10111','uk':'11000',
+  'zh':'11001','other':'11010'
+};
+
+const EMOTIONS = [
+  { key:'emotion_vitality',  label:'活力感', desc:'joy · amusement · pleasure · interest · love', color:'#c8993a' },
+  { key:'emotion_stability', label:'穩定感', desc:'admiration · pride · contentment · relief · compassion', color:'#3a7dc8' },
+  { key:'emotion_resonance', label:'共鳴感', desc:'sadness · disappointment · regret · guilt · shame', color:'#9a5cbf' },
+  { key:'emotion_alert',     label:'警示感', desc:'anger · contempt · disgust · fear · hate', color:'#c83a3a' },
+];
+
+/* OLS 模型係數（從 Python 訓練結果匯入） */
+const MODEL = {
+  emotion_vitality: {
+    beta: [0.7906,-0.0145,0.0002,-0.0542,0.0207,0.0490,-0.0199,0.0279,0.0167,0.0001,0.0053,0.0423,0.0326,0.0317,0.0064,-6.6604,-6.5029,-6.6616,-6.4679,-6.6370,-6.3448,-6.3346,-6.5067,-6.3138,-6.4218,-6.5700,-6.3388],
+    mean:[7.8614,0.2584,1.4965,0.0860,0.3842,0.4589,0.4613,0.5080,0.6026,0.2591,0.2535,0.4949,0.4641,0.4428,0.0835,0.0833,0.0834,0.0842,0.0825,0.0824,0.0840,0.0834,0.0829,0.0831,0.0845,0.0830],
+    std: [0.4791,0.4522,0.7308,0.2804,0.4864,0.4983,0.4985,0.4999,0.4894,0.4381,0.4350,0.5000,0.4987,0.4967,0.2766,0.2764,0.2764,0.2776,0.2751,0.2750,0.2774,0.2764,0.2757,0.2760,0.2781,0.2759]
+  },
+  emotion_stability: {
+    beta: [0.6441,-0.0171,-0.0052,-0.0586,0.0195,0.0579,-0.0367,0.0210,0.0185,-0.0029,-0.0212,0.0032,0.0155,0.0308,0.0178,-4.2623,-4.0608,-4.2686,-4.1021,-4.2519,-4.1658,-4.1695,-4.1562,-4.1936,-4.0907,-4.0509,-4.1495],
+    mean:[7.8614,0.2584,1.4965,0.0860,0.3842,0.4589,0.4613,0.5080,0.6026,0.2591,0.2535,0.4949,0.4641,0.4428,0.0835,0.0833,0.0834,0.0842,0.0825,0.0824,0.0840,0.0834,0.0829,0.0831,0.0845,0.0830],
+    std: [0.4791,0.4522,0.7308,0.2804,0.4864,0.4983,0.4985,0.4999,0.4894,0.4381,0.4350,0.5000,0.4987,0.4967,0.2766,0.2764,0.2764,0.2776,0.2751,0.2750,0.2774,0.2764,0.2757,0.2760,0.2781,0.2759]
+  },
+  emotion_resonance: {
+    beta: [0.4228,-0.0053,0.0059,-0.0668,0.0186,0.0181,-0.0025,0.0019,0.0440,-0.0104,0.0063,0.0155,0.0014,0.0065,0.0095,-3.9326,-4.1612,-4.1534,-4.2626,-3.9367,-4.2246,-4.2697,-4.1766,-4.1929,-4.2424,-4.2464,-4.2265],
+    mean:[7.8614,0.2584,1.4965,0.0860,0.3842,0.4589,0.4613,0.5080,0.6026,0.2591,0.2535,0.4949,0.4641,0.4428,0.0835,0.0833,0.0834,0.0842,0.0825,0.0824,0.0840,0.0834,0.0829,0.0831,0.0845,0.0830],
+    std: [0.4791,0.4522,0.7308,0.2804,0.4864,0.4983,0.4985,0.4999,0.4894,0.4381,0.4350,0.5000,0.4987,0.4967,0.2766,0.2764,0.2764,0.2776,0.2751,0.2750,0.2774,0.2764,0.2757,0.2760,0.2781,0.2759]
+  },
+  emotion_alert: {
+    beta: [0.3823,-0.0066,0.0141,-0.0684,0.0243,0.0141,-0.0002,0.0030,0.0516,-0.0034,0.0073,0.0148,0.0029,0.0174,0.0004,-3.9480,-4.2582,-4.1508,-4.2528,-4.1483,-4.2194,-4.2894,-4.2268,-4.0346,-4.2697,-4.2882,-4.2195],
+    mean:[7.8614,0.2584,1.4965,0.0860,0.3842,0.4589,0.4613,0.5080,0.6026,0.2591,0.2535,0.4949,0.4641,0.4428,0.0835,0.0833,0.0834,0.0842,0.0825,0.0824,0.0840,0.0834,0.0829,0.0831,0.0845,0.0830],
+    std: [0.4791,0.4522,0.7308,0.2804,0.4864,0.4983,0.4985,0.4999,0.4894,0.4381,0.4350,0.5000,0.4987,0.4967,0.2766,0.2764,0.2764,0.2776,0.2751,0.2750,0.2774,0.2764,0.2757,0.2760,0.2781,0.2759]
+  }
+};
+
+let selectedColour = null;
+
+/* 建立顏色格 */
+const grid = document.getElementById('colour-grid');
+COLOURS.forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'colour-btn';
+  btn.dataset.name = c.name;
+  btn.innerHTML = `<div class="dot" style="background:${c.hex}"></div><span class="clabel">${c.zh}<br>${c.name}</span>`;
+  btn.onclick = () => {
+    document.querySelectorAll('.colour-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedColour = c.name;
+  };
+  grid.appendChild(btn);
+});
+
+/* 建立國家/語言下拉 */
+function buildSelect(id, map, defaultVal) {
+  const sel = document.getElementById(id);
+  Object.entries(map).forEach(([k, v]) => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = `${v}`;
+    if (k === defaultVal) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+buildSelect('country', COUNTRY_MAP, 'us');
+buildSelect('lang',    LANG_MAP,    'en');
+
+document.getElementById('fluent').addEventListener('input', function() {
+  document.getElementById('fluent-val').textContent = this.value;
+});
+
+/* 推論 */
+function predict(colourName) {
+  const gender    = parseFloat(document.getElementById('gender').value);
+  const age_group = parseFloat(document.getElementById('age_group').value);
+  const fluent    = parseFloat(document.getElementById('fluent').value);
+  const country   = document.getElementById('country').value;
+  const lang      = document.getElementById('lang').value;
+
+  const cb = (COUNTRY_BIN[country] || COUNTRY_BIN['other']);
+  const lb = (LANG_BIN[lang]       || LANG_BIN['other']);
+
+  const personal = [
+    fluent, gender, age_group,
+    +cb[0],+cb[1],+cb[2],+cb[3],+cb[4],+cb[5],
+    +lb[0],+lb[1],+lb[2],+lb[3],+lb[4],
+  ];
+  const colourVec = COLOUR_ORDER.map(c => c === colourName ? 1 : 0);
+  const xRaw = [...personal, ...colourVec];
+
+  const result = {};
+  for (const em of EMOTIONS) {
+    const { beta, mean, std } = MODEL[em.key];
+    let s = beta[0];
+    for (let i = 0; i < xRaw.length; i++) {
+      const xs = (xRaw[i] - mean[i]) / (std[i] || 1);
+      s += beta[i+1] * xs;
+    }
+    result[em.key] = Math.min(5, Math.max(0, s));
+  }
+  return result;
+}
+
+function runPrediction() {
+  if (!selectedColour) {
+    alert('請先選擇一個顏色');
+    return;
+  }
+  const preds = predict(selectedColour);
+  const colourInfo = COLOURS.find(c => c.name === selectedColour);
+
+  document.getElementById('empty-state').style.display = 'none';
+  const rc = document.getElementById('result-card');
+  rc.style.display = 'block';
+
+  rc.innerHTML = `
+    <div class="result-header">
+      <div class="result-dot" style="background:${colourInfo.hex}"></div>
+      <div>
+        <div class="result-title">${colourInfo.zh}（${colourInfo.name}）</div>
+        <div class="result-sub">情緒輪廓預測結果</div>
+      </div>
+    </div>
+    ${EMOTIONS.map(em => {
+      const val = preds[em.key];
+      const pct = (val / 5 * 100).toFixed(1);
+      return `
+      <div class="emotion-row">
+        <div class="emotion-meta">
+          <div>
+            <div class="emotion-name">${em.label}</div>
+            <div style="font-size:11px;color:#555;margin-top:2px">${em.desc}</div>
+          </div>
+          <div class="emotion-score" style="color:${em.color}">${val.toFixed(3)}</div>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" id="bar-${em.key}" style="background:${em.color};width:0%"></div>
+        </div>
+      </div>`;
+    }).join('')}`;
+
+  /* 動畫 */
+  requestAnimationFrame(() => {
+    EMOTIONS.forEach(em => {
+      const val = preds[em.key];
+      const pct = (val / 5 * 100).toFixed(1);
+      document.getElementById(`bar-${em.key}`).style.width = pct + '%';
+    });
+  });
+}
+</script>
+</body>
+</html>
